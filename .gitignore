@@ -1,0 +1,4 @@
+.vscode
+.conda
+/onestate_extruder.py
+/tutorial_velocity.ipynb
