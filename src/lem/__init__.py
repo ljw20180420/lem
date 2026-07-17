@@ -8,7 +8,6 @@ import numpy as np
 import pandas as pd
 from matplotlib.ticker import EngFormatter
 
-from polychrom_hoomd import build
 from polykit.generators.initial_conformations import grow_cubic
 
 mpl.use("agg")
