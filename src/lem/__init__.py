@@ -125,18 +125,20 @@ def populate_bonds_to_snapshot(cfg: dict, snapshot: gsd.hoomd.Frame) -> gsd.hoom
     start_ids = np.add.outer(
         np.arange(0, snapshot.particles.N, one_rep_size), np.arange(one_rep_size - 1)
     ).flatten()
-    breakpoint()
-    snapshot.bonds.group = np.stack((start_ids, start_ids + 1), axis=1)
+    snapshot.bonds.group = np.add.outer(start_ids, np.arange(2))
+
+    return snapshot
 
 
-def tmp():
-    angle_types = cfg["force"]["Angular forces"].keys()
+def populate_angles_to_snapshot(
+    cfg: dict, snapshot: gsd.hoomd.Frame
+) -> gsd.hoomd.Frame:
+    snapshot.angles.types = list(cfg["force"]["Angular forces"].keys())
 
-    build.set_chromosomes(
-        snapshot,
-        monomer_positions,
-        chromosome_sizes=[len(chromatin_types)],
-        monomer_type_list=list(monomer_types),
-        bond_type_list=list(bond_types),
-        angle_type_list=list(angle_types),
-    )
+    one_rep_size = snapshot.particles.N // cfg["n_copies"]
+    start_ids = np.add.outer(
+        np.arange(0, snapshot.particles.N, one_rep_size), np.arange(one_rep_size - 2)
+    ).flatten()
+    snapshot.angles.group = np.add.outer(start_ids, np.arange(3))
+
+    return snapshot
