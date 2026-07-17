@@ -1,6 +1,7 @@
 /.vscode
 __pycache__
 /hoomd.pth
+/run.py
 /polychrom_hoomd
 /polykit
 /onestate_extruder.py

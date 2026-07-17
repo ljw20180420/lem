@@ -1,11 +1,15 @@
 import bioframe as bf
 import cooler
 import cooltools
+import gsd.hoomd
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from matplotlib.ticker import EngFormatter
+
+from polychrom_hoomd import build
+from polykit.generators.initial_conformations import grow_cubic
 
 mpl.use("agg")
 
@@ -70,3 +74,69 @@ def align_E1(cfg: dict) -> None:
         columns={"AB_": "AB"}
     )
     df_AB.to_csv(cfg["data_dir"] / "output" / "AB.csv", index=False)
+
+
+def set_snapshot_box(cfg: dict) -> gsd.hoomd.Frame:
+    assert (cfg["end"] - cfg["start"]) % cfg["bin"] == 0, (
+        "bin does not divide locus size"
+    )
+    # Initialize simulation with the appropriate box size
+    number_of_monomers = (cfg["end"] - cfg["start"]) // cfg["bin"]
+    number_of_monomers *= cfg["n_copies"]
+    box_length = (number_of_monomers / cfg["density"]) ** (1 / 3.0)
+    snapshot = gsd.hoomd.Frame()
+    box = [box_length] * 3 + [0] * 3
+    snapshot.configuration.box = np.asarray(box, dtype=np.float32)
+
+    return snapshot
+
+
+def populate_particles_to_snapshot(
+    cfg: dict, snapshot: gsd.hoomd.Frame
+) -> gsd.hoomd.Frame:
+    # Get monomer types of the locus as A(0)/B(1) compartment.
+    snapshot.particles.typeid, snapshot.particles.types = pd.factorize(
+        pd.read_csv(cfg["data_dir"] / "output" / "AB.csv", header=0)["AB"], sort=True
+    )
+    # Replicate the locus to optimize statistical sampling and mitigate potential finite-size effects.
+    snapshot.particles.typeid = np.tile(snapshot.particles.typeid, cfg["n_copies"])
+    snapshot.particles.N = len(snapshot.particles.typeid)
+    # Check whether A -> 0 and B -> 1.
+    assert snapshot.particles.types[0] == "A", "A to 0 and B to 1"
+    snapshot.particles.types = snapshot.particles.types.to_list()
+
+    # Build random, dense initial conformations.
+    box_length = snapshot.configuration.box.max().item()
+    snapshot.particles.position = grow_cubic(
+        N=snapshot.particles.N, boxSize=int(box_length - 1)
+    ).astype(np.float32)
+    # Centralize
+    snapshot.particles.position -= snapshot.particles.position.mean(
+        axis=0, keepdims=True
+    )
+
+    return snapshot
+
+
+def populate_bonds_to_snapshot(cfg: dict, snapshot: gsd.hoomd.Frame) -> gsd.hoomd.Frame:
+    snapshot.bonds.types = list(cfg["force"]["Bonded forces"].keys())
+
+    one_rep_size = snapshot.particles.N // cfg["n_copies"]
+    start_ids = np.add.outer(
+        np.arange(0, snapshot.particles.N, one_rep_size), np.arange(one_rep_size - 1)
+    ).flatten()
+    breakpoint()
+    snapshot.bonds.group = np.stack((start_ids, start_ids + 1), axis=1)
+
+
+def tmp():
+    angle_types = cfg["force"]["Angular forces"].keys()
+
+    build.set_chromosomes(
+        snapshot,
+        monomer_positions,
+        chromosome_sizes=[len(chromatin_types)],
+        monomer_type_list=list(monomer_types),
+        bond_type_list=list(bond_types),
+        angle_type_list=list(angle_types),
+    )
