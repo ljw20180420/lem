@@ -1,4 +1,7 @@
-.vscode
-.conda
+/.vscode
+__pycache__
+/hoomd.pth
+/polychrom_hoomd
+/polykit
 /onestate_extruder.py
 /tutorial_velocity.ipynb
