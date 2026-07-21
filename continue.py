@@ -9,7 +9,6 @@ import polychrom_hoomd.forces as forces
 import polychrom_hoomd.log as log
 import polychrom_hoomd.render as render
 from onestate_extruder import LEFTranslocatorDirectional, compute_LEF_pos
-from polykit.generators.initial_conformations import grow_cubic
 
 # Generate RNG seed
 rng_seed = np.random.randint([0, 2**16])

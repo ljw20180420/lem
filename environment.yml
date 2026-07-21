@@ -1,0 +1,15 @@
+name: lem
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - hoomd
+  - cooltools
+  - genomepy
+  - gsd
+  - plotnine
+  - pysam
+  - rowan
+  - fresnel
+  - prompt_toolkit
