@@ -43,6 +43,9 @@ def cpcdh() -> dict:
         "bin": 2500,
         "density": 0.2,
         "n_copies": 100,
+        "warm_up": 100000,
+        "period": 1000,
+        "device": "gpu",
         "seed": 63036,
         "force": force_fudenberg2026(),
     }

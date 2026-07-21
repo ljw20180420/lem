@@ -1,55 +1,8 @@
 import json
 
-import hoomd
-import numpy as np
-
-import polychrom_hoomd.build as build
 import polychrom_hoomd.extrude as extrude
-import polychrom_hoomd.forces as forces
-import polychrom_hoomd.log as log
 import polychrom_hoomd.render as render
 from onestate_extruder import LEFTranslocatorDirectional, compute_LEF_pos
-
-# Generate RNG seed
-rng_seed = np.random.randint([0, 2**16])
-
-# Initialise HooMD on the CPU or GPU, based on availability
-hoomd_device = build.get_hoomd_device()
-# Initialize empty simulation object
-system = hoomd.Simulation(device=hoomd_device, seed=rng_seed)
-
-# Setup neighbor list
-nl = hoomd.md.nlist.Cell(buffer=0.4)
-
-
-# Setup HooMD simulation object
-system.create_state_from_snapshot(snapshot)
-
-# Set chromosome excluded volume
-repulsion_forces = forces.get_repulsion_forces(nl, **force_dict)
-
-# Set bonded/angular potentials
-bonded_forces = forces.get_bonded_forces(**force_dict)
-angular_forces = forces.get_angular_forces(**force_dict)
-
-# Set attractive/DPD forces
-dpd_forces = forces.get_dpd_forces(nl, **force_dict)
-attraction_forces = forces.get_attraction_forces(nl, **force_dict)
-
-# Define full force_field
-dpd_force_field = (
-    repulsion_forces + bonded_forces + angular_forces + attraction_forces + dpd_forces
-)
-
-# Setup integrator methods
-nve = hoomd.md.methods.NVE(filter=hoomd.filter.All())
-dpd_integrator = hoomd.md.Integrator(dt=5e-3, methods=[nve], forces=dpd_force_field)
-
-# Set up logs and integrator objects
-logger = log.get_logger(system)
-
-system.operations.integrator = dpd_integrator
-system.operations.writers.append(log.table_formatter(logger, period=1000))
 
 # Run
 system.run(1e5)
