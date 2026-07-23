@@ -72,7 +72,7 @@ class Frame:
             np.arange(one_rep_size - 1),
         ).flatten()
         LEF_num = int(
-            frame.particles.N // (self.cfg["1d"]["LEF_separation"] / self.cfg["bin"])
+            frame.particles.N / (self.cfg["1d"]["LEF_separation"] / self.cfg["bin"])
         )
         frame.bonds.N = len(start_ids) + LEF_num
         lef1 = np.random.randint(low=0, high=frame.particles.N - 1, size=LEF_num)
@@ -339,7 +339,6 @@ class LEFTranslocatorDirectionalCBS:
 def loop_extrusion_1d(cfg: dict, steps: int):
     """LEF dynamics computation"""
 
-    breakpoint()
     N_particles = (cfg["end"] - cfg["start"]) // cfg["bin"] * cfg["n_copies"]
     LEF_num = int(N_particles / (cfg["1d"]["LEF_separation"] / cfg["bin"]))
 
@@ -354,20 +353,19 @@ def loop_extrusion_1d(cfg: dict, steps: int):
     pauseProb2 = np.zeros(N_particles, dtype=np.double)
     df_AB_CBS = pd.read_csv(cfg["data_dir"] / "output" / "AB_CBS.csv", header=0)
     for name in cfg["CBS"].keys():
-        pauseProb1[df_AB_CBS[name] == "+"] = cfg["1d"]["pause"]
-        pauseProb2[df_AB_CBS[name] == "-"] = cfg["1d"]["pause"]
+        fCBS = np.tile((df_AB_CBS[name] == "+").to_numpy(), cfg["n_copies"])
+        pauseProb1[fCBS] = cfg["1d"]["pause"]
+        rCBS = np.tile((df_AB_CBS[name] == "-").to_numpy(), cfg["n_copies"])
+        pauseProb2[rCBS] = cfg["1d"]["pause"]
 
     translocator = LEFTranslocatorDirectionalCBS(
         emissionProb, deathProb, pauseProb1, pauseProb2, LEF_num
     )
-
     translocator.steps(cfg["1d"]["warmup"])
 
     trajectory_1d = np.zeros((steps, LEF_num, 2), dtype=int)
-
     for step in range(steps):
         translocator.steps(1)
-
         trajectory_1d[step] = np.asarray(translocator.getLEFs()).T
 
     return trajectory_1d
@@ -431,7 +429,7 @@ def loop_extrusion_3d(cfg: dict, steps: int) -> None:
     n_3d_to_1d = cfg["1d"]["tau_1d"] / cfg["tau_3d"]
     assert n_3d_to_1d % cfg["period"] == 0, "period does not divide n_3d_to_1d"
     simulation = load_simulation(cfg)
-    trajectory_1d = loop_extrusion_1d(cfg, simulation, steps)
+    trajectory_1d = loop_extrusion_1d(cfg, steps)
     xp = np if cfg["device"] == "cpu" else cp
     for bond_list in trajectory_1d:
         update_topology(simulation, bond_list, xp, thermalize=False)
