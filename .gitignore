@@ -1,8 +1,5 @@
 /.vscode
 __pycache__
-/hoomd.pth
 /run.py
 /polychrom_hoomd
 /polykit
-/fundenberg
-/tutorial_velocity.ipynb

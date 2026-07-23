@@ -36,6 +36,7 @@ def extrusion_fundenberg2026() -> dict:
         "LEF_separation": 185000,  # [bp]
         "LEF_lifetime": 1320,  # [s]
         "tau_1d": 20,  # [s], yields a baseline extrusion rate of 2*2.5/20 = 0.25 kb/s, used by fundenberg
+        "pause": 0.9,  # https://github.com/open2c/polychrom/blob/master/examples/loopExtrusion/extrusion_1D_newCode.ipynb
     }
 
     return cfg
@@ -46,6 +47,7 @@ def cpcdh() -> dict:
 
     return {
         "data_dir": data_dir,
+        "CBS": {"tCBS": "tCBS.csv"},
         "genome": "/home/ljw/.local/share/genomes/GRCm38/GRCm38.fa",
         "hic": os.fspath(data_dir / "wt.mcool::resolutions/10000"),
         "chrom": "chr18",

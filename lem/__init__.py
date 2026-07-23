@@ -1,84 +1,16 @@
-import bioframe as bf
-import cooler
-import cooltools
 import cupy as cp
 import gsd.hoomd
 import hoomd
 import matplotlib as mpl
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from matplotlib.ticker import EngFormatter
 
 import polychrom_hoomd.forces
 import polychrom_hoomd.log
 import polychrom_hoomd.render
-from fundenberg.onestate_extruder import LEFTranslocatorDirectional, compute_LEF_pos
 from polykit.generators.initial_conformations import grow_cubic
 
 mpl.use("agg")
-
-
-def get_E1(cfg: dict) -> None:
-    clr = cooler.Cooler(cfg["hic"])
-    bins = clr.bins().fetch((cfg["chrom"], cfg["start"], cfg["end"]))
-
-    genome = bf.load_fasta(cfg["genome"])
-    gc_cov = bf.frac_gc(bins[["chrom", "start", "end"]], genome)
-
-    cis_eigs = cooltools.eigs_cis(
-        clr,
-        gc_cov,
-        view_df=pd.DataFrame({
-            "chrom": [cfg["chrom"]],
-            "start": [cfg["start"]],
-            "end": [cfg["end"]],
-            "name": [cfg["chrom"]],
-        }),
-        n_eigs=1,
-    )
-    df_E1 = cis_eigs[1][["chrom", "start", "end", "E1"]].assign(
-        E1=lambda df: df["E1"].interpolate()
-    )
-
-    (cfg["data_dir"] / "output").mkdir(exist_ok=True, parents=True)
-    df_E1.to_csv(cfg["data_dir"] / "output" / "E1.csv", index=False)
-
-    bp_formatter = EngFormatter("b")
-    ax = df_E1.plot(x="start", y="E1")
-    ax.xaxis.set_major_formatter(bp_formatter)
-    ax.set_xticks(
-        np.arange(cfg["start"], cfg["end"], 100000),
-    )
-    ax.tick_params(axis="x", labelrotation=45)
-    fig = ax.get_figure()
-    fig.tight_layout()
-    fig.savefig(cfg["data_dir"] / "output" / "E1.pdf")
-    plt.close(fig)
-
-
-def align_E1(cfg: dict) -> None:
-    df_E1 = pd.read_csv(cfg["data_dir"] / "output" / "E1.csv", header=0).assign(
-        AB=lambda df: pd.cut(
-            df["E1"], bins=[-float("inf"), 0, float("inf")], labels=["B", "A"]
-        )
-    )
-
-    df_bin = bf.binnify(
-        chromsizes=pd.Series(
-            data=[cfg["end"] - cfg["start"]],
-            index=[cfg["chrom"]],
-        ),
-        binsize=cfg["bin"],
-    ).assign(
-        start=lambda df: df["start"] + cfg["start"],
-        end=lambda df: df["end"] + cfg["start"],
-    )
-
-    df_AB = bf.closest(df_bin, df_E1)[["chrom", "start", "end", "AB_"]].rename(
-        columns={"AB_": "AB"}
-    )
-    df_AB.to_csv(cfg["data_dir"] / "output" / "AB.csv", index=False)
 
 
 class Frame:
@@ -279,18 +211,164 @@ def warmup(cfg: dict) -> None:
     simulation.run(steps=cfg["warmup"])
 
 
-def loop_extrusion_1d(
-    cfg: dict, simulation: hoomd.Simulation, steps: int
-) -> np.ndarray:
-    trajectory_1d = compute_LEF_pos(
-        extrusion_engine=LEFTranslocatorDirectional,
-        n_tot=simulation.state.N_particles,
-        trajectory_length=steps,
-        dummy_steps=cfg["1d"]["warmup"],
-        LEF_lifetime=cfg["1d"]["LEF_lifetime"] / cfg["1d"]["tau_1d"],
-        LEF_separation=cfg["1d"]["LEF_separation"],
-        kb_per_site=cfg["bin"],
+class LEFTranslocatorDirectionalCBS:
+    def __init__(self, emissionProb, deathProb, pauseProb1, pauseProb2, numLEF):
+        emissionProb[0] = 0
+        emissionProb[len(emissionProb) - 1] = 0
+
+        self.N = len(emissionProb)
+        self.M = numLEF
+        self.emission = emissionProb
+        self.falloff = deathProb
+        self.pause1 = pauseProb1
+        self.pause2 = pauseProb2
+        cumem = np.cumsum(emissionProb, dtype=np.double)
+        cumem /= cumem[-1]
+        self.cumEmission = cumem
+        self.LEFs1 = np.zeros((self.M), int)
+        self.LEFs2 = np.zeros((self.M), int)
+        self.occupied = np.zeros(self.N, int)
+        self.occupied[0] = 1
+        self.occupied[self.N - 1] = 1
+        self.maxss = 1000000
+        self.curss = 99999999
+
+        for ind in range(self.M):
+            self.birth(ind)
+
+    def birth(self, ind):
+
+        while True:
+            pos = self.getss()
+
+            if pos >= self.N - 1:
+                print("bad value", pos, self.cumEmission[len(self.cumEmission) - 1])
+                continue
+
+            if pos <= 0:
+                print("bad value", pos, self.cumEmission[0])
+                continue
+
+            if self.occupied[pos] == 1:
+                continue
+
+            self.LEFs1[ind] = pos
+            self.LEFs2[ind] = pos
+
+            self.occupied[pos] = 1
+
+            if (pos < (self.N - 3)) and (self.occupied[pos + 1] == 0):
+                if np.random.random() > 0.5:
+                    self.LEFs2[ind] = pos + 1
+                    self.occupied[pos + 1] = 1
+
+            return
+
+    def death(self):
+
+        for i in range(self.M):
+            falloff1 = self.falloff[self.LEFs1[i]]
+            falloff2 = self.falloff[self.LEFs2[i]]
+
+            falloff = max(falloff1, falloff2)
+
+            if np.random.random() < falloff:
+                self.occupied[self.LEFs1[i]] = 0
+                self.occupied[self.LEFs2[i]] = 0
+
+                self.birth(i)
+
+    def getss(self):
+
+        if self.curss >= self.maxss - 1:
+            foundArray = np.array(
+                np.searchsorted(self.cumEmission, np.random.random(self.maxss)),
+                dtype=np.longlong,
+            )
+            self.ssarray = foundArray
+
+            self.curss = -1
+
+        self.curss += 1
+
+        return self.ssarray[self.curss]
+
+    def step(self):
+        for i in range(self.M):
+            cur1 = self.LEFs1[i]
+            cur2 = self.LEFs2[i]
+
+            if self.occupied[cur1 - 1] == 0:
+                pause1 = self.pause1[self.LEFs1[i]]
+
+                if np.random.random() > pause1:
+                    self.occupied[cur1 - 1] = 1
+                    self.occupied[cur1] = 0
+
+                    self.LEFs1[i] = cur1 - 1
+
+            if self.occupied[cur2 + 1] == 0:
+                pause2 = self.pause2[self.LEFs2[i]]
+
+                if np.random.random() > pause2:
+                    self.occupied[cur2 + 1] = 1
+                    self.occupied[cur2] = 0
+
+                    self.LEFs2[i] = cur2 + 1
+
+    def steps(self, N):
+        for i in range(N):
+            self.death()
+            self.step()
+
+    def getOccupied(self):
+        return np.array(self.occupied)
+
+    def getLEFs(self):
+        return np.array(self.LEFs1), np.array(self.LEFs2)
+
+    def updateMap(self, cmap):
+        cmap[self.LEFs1, self.LEFs2] += 1
+        cmap[self.LEFs2, self.LEFs1] += 1
+
+    def updatePos(self, pos, ind):
+        pos[ind, self.LEFs1] = 1
+        pos[ind, self.LEFs2] = 1
+
+
+def loop_extrusion_1d(cfg: dict, steps: int):
+    """LEF dynamics computation"""
+
+    breakpoint()
+    N_particles = (cfg["end"] - cfg["start"]) // cfg["bin"] * cfg["n_copies"]
+    LEF_num = int(N_particles / (cfg["1d"]["LEF_separation"] / cfg["bin"]))
+
+    emissionProb = np.full(N_particles, 0.1, dtype=np.double)
+    deathProb = np.full(
+        N_particles,
+        1.0 / (cfg["1d"]["LEF_lifetime"] / cfg["1d"]["tau_1d"]),
+        dtype=np.double,
     )
+
+    pauseProb1 = np.zeros(N_particles, dtype=np.double)
+    pauseProb2 = np.zeros(N_particles, dtype=np.double)
+    df_AB_CBS = pd.read_csv(cfg["data_dir"] / "output" / "AB_CBS.csv", header=0)
+    for name in cfg["CBS"].keys():
+        pauseProb1[df_AB_CBS[name] == "+"] = cfg["1d"]["pause"]
+        pauseProb2[df_AB_CBS[name] == "-"] = cfg["1d"]["pause"]
+
+    translocator = LEFTranslocatorDirectionalCBS(
+        emissionProb, deathProb, pauseProb1, pauseProb2, LEF_num
+    )
+
+    translocator.steps(cfg["1d"]["warmup"])
+
+    trajectory_1d = np.zeros((steps, LEF_num, 2), dtype=int)
+
+    for step in range(steps):
+        translocator.steps(1)
+
+        trajectory_1d[step] = np.asarray(translocator.getLEFs()).T
 
     return trajectory_1d
 
