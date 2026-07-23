@@ -30,6 +30,17 @@ def force_fudenberg2026() -> dict:
     }
 
 
+def extrusion_fundenberg2026() -> dict:
+    cfg = {
+        "warmup": 50,
+        "LEF_separation": 185000,  # [bp]
+        "LEF_lifetime": 1320,  # [s]
+        "tau_1d": 20,  # [s], yields a baseline extrusion rate of 2*2.5/20 = 0.25 kb/s, used by fundenberg
+    }
+
+    return cfg
+
+
 def cpcdh() -> dict:
     data_dir = Path("/home/ljw/sdc1/cpcdh")
 
@@ -42,10 +53,12 @@ def cpcdh() -> dict:
         "end": 37900000,
         "bin": 2500,
         "density": 0.2,
+        "tau_3d": 0.005,  # [s], from fitting polymer kinetics to experimental MSDs (means-quared displacements) https://doi.org/10.1016/j.xgen.2025.101098
         "n_copies": 100,
-        "warm_up": 100000,
+        "warmup": 100000,
         "period": 1000,
-        "device": "gpu",
+        "device": "cpu",
         "seed": 63036,
         "force": force_fudenberg2026(),
+        "1d": extrusion_fundenberg2026(),
     }

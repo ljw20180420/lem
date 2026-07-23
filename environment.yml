@@ -4,12 +4,15 @@ channels:
   - bioconda
   - defaults
 dependencies:
-  - hoomd
-  - cooltools
   - genomepy
+  - cooltools
+  - hoomd
   - gsd
   - plotnine
   - pysam
   - rowan
+  - cupy
   - fresnel
   - prompt_toolkit
+  - ipython
+  - ipykernel

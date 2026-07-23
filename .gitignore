@@ -4,5 +4,5 @@ __pycache__
 /run.py
 /polychrom_hoomd
 /polykit
-/onestate_extruder.py
+/fundenberg
 /tutorial_velocity.ipynb

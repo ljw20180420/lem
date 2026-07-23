@@ -1,6 +1,7 @@
 import bioframe as bf
 import cooler
 import cooltools
+import cupy as cp
 import gsd.hoomd
 import hoomd
 import matplotlib as mpl
@@ -9,9 +10,10 @@ import numpy as np
 import pandas as pd
 from matplotlib.ticker import EngFormatter
 
-import polychrom_hoomd.build as build
-import polychrom_hoomd.log as log
-from polychrom_hoomd import forces, render
+import polychrom_hoomd.forces
+import polychrom_hoomd.log
+import polychrom_hoomd.render
+from fundenberg.onestate_extruder import LEFTranslocatorDirectional, compute_LEF_pos
 from polykit.generators.initial_conformations import grow_cubic
 
 mpl.use("agg")
@@ -137,11 +139,29 @@ class Frame:
             np.arange(0, frame.particles.N, one_rep_size),
             np.arange(one_rep_size - 1),
         ).flatten()
-        frame.bonds.N = len(start_ids)
-        frame.bonds.group = np.add.outer(start_ids, np.arange(2))
+        LEF_num = int(
+            frame.particles.N // (self.cfg["1d"]["LEF_separation"] / self.cfg["bin"])
+        )
+        frame.bonds.N = len(start_ids) + LEF_num
+        lef1 = np.random.randint(low=0, high=frame.particles.N - 1, size=LEF_num)
+        lef2 = lef1 + 1
+        frame.bonds.group = np.concatenate(
+            (
+                np.add.outer(start_ids, np.arange(2)),
+                np.stack((lef1, lef2), axis=1),
+            ),
+            axis=0,
+        )
 
-        typeid = frame.bonds.types.index("Backbone")
-        frame.bonds.typeid = np.full(frame.bonds.N, typeid, dtype=np.uint32)
+        backbone_typeid = frame.bonds.types.index("Backbone")
+        LEF_dummy_typeid = frame.bonds.types.index("LEF_dummy")
+        frame.bonds.typeid = np.concatenate(
+            (
+                np.full(frame.bonds.N - LEF_num, backbone_typeid, dtype=np.uint32),
+                np.full(LEF_num, LEF_dummy_typeid, dtype=np.uint32),
+            ),
+            axis=0,
+        )
 
         return frame
 
@@ -164,53 +184,42 @@ class Frame:
 
 def init_trajectory(cfg: dict) -> None:
     frame = Frame(cfg)()
-    with gsd.hoomd.open(
-        name=cfg["data_dir"] / "output" / "trajectory.gsd", mode="w"
-    ) as fd:
-        fd.append(frame)
-
-
-def append_trajectory(cfg: dict, frame: gsd.hoomd.Frame) -> None:
-    with gsd.hoomd.open(
-        name=cfg["data_dir"] / "output" / "trajectory.gsd", mode="a"
-    ) as fd:
-        fd.append(frame)
-
-
-def draw_trajectory(cfg: dict) -> None:
-    # Visualize starting conformation using the Fresnel backend (A compartments in blue, B in red)
-    (cfg["data_dir"] / "output" / "frames").mkdir(exist_ok=True, parents=True)
-    with gsd.hoomd.open(
-        name=cfg["data_dir"] / "output" / "trajectory.gsd", mode="r"
-    ) as fd:
-        for i, frame in enumerate(fd):
-            render.fresnel(frame, show="compartments", cmap="coolwarm").static(
-                pathtrace=False,
-                png_output_file=cfg["data_dir"]
-                / "output"
-                / "frames"
-                / f"frame-{i}.png",
-            )
+    if cfg["device"] == "gpu":
+        device = hoomd.device.GPU(notice_level=3)
+    else:
+        assert cfg["device"] == "cpu", "only support devices cpu and gpu"
+        device = hoomd.device.CPU(notice_level=3)
+    simulation = hoomd.Simulation(device=device, seed=cfg["seed"])
+    simulation.create_state_from_snapshot(snapshot=frame)
+    hoomd.write.GSD.write(
+        state=simulation.state,
+        filename=cfg["data_dir"] / "output" / "trajectory.gsd",
+        mode="wb",  # Use 'wb' to write/overwrite a clean file
+    )
 
 
 class Integrator:
     def __init__(self, cfg: dict) -> None:
-        self.cfg
+        self.cfg = cfg
 
     def __call__(self) -> hoomd.md.Integrator:
         # Setup neighbor list
         nl = hoomd.md.nlist.Cell(buffer=0.4)
 
         # Set chromosome excluded volume
-        repulsion_forces = forces.get_repulsion_forces(nl, **self.cfg["force"])
+        repulsion_forces = polychrom_hoomd.forces.get_repulsion_forces(
+            nl, **self.cfg["force"]
+        )
 
         # Set bonded/angular potentials
-        bonded_forces = forces.get_bonded_forces(**self.cfg["force"])
-        angular_forces = forces.get_angular_forces(**self.cfg["force"])
+        bonded_forces = polychrom_hoomd.forces.get_bonded_forces(**self.cfg["force"])
+        angular_forces = polychrom_hoomd.forces.get_angular_forces(**self.cfg["force"])
 
         # Set attractive/DPD forces
-        dpd_forces = forces.get_dpd_forces(nl, **self.cfg["force"])
-        attraction_forces = forces.get_attraction_forces(nl, **self.cfg["force"])
+        dpd_forces = polychrom_hoomd.forces.get_dpd_forces(nl, **self.cfg["force"])
+        attraction_forces = polychrom_hoomd.forces.get_attraction_forces(
+            nl, **self.cfg["force"]
+        )
 
         # Define full force_field
         dpd_force_field = (
@@ -224,14 +233,25 @@ class Integrator:
         # Setup integrator methods
         nve = hoomd.md.methods.ConstantVolume(filter=hoomd.filter.All())
         dpd_integrator = hoomd.md.Integrator(
-            dt=5e-3, methods=[nve], forces=dpd_force_field
+            dt=self.cfg["tau_3d"], methods=[nve], forces=dpd_force_field
         )
 
         return dpd_integrator
 
 
-def simulate(cfg: dict, steps: int) -> None:
-    assert steps % cfg["period"] == 0, "period does not divide steps"
+def get_logger(simulation: hoomd.Simulation) -> hoomd.logging.Logger:
+    logger = hoomd.logging.Logger(categories=["scalar", "string"])
+    logger.add(simulation, quantities=["timestep", "tps"])
+    status = polychrom_hoomd.log.Status(simulation)
+    logger[("Status", "etr")] = (status, "etr", "string")
+    thermo = hoomd.md.compute.ThermodynamicQuantities(filter=hoomd.filter.All())
+    simulation.operations.computes.append(thermo)
+    logger.add(thermo, quantities=["kinetic_temperature"])
+
+    return logger
+
+
+def load_simulation(cfg: dict) -> hoomd.Simulation:
     if cfg["device"] == "gpu":
         device = hoomd.device.GPU(notice_level=3)
     else:
@@ -246,7 +266,113 @@ def simulate(cfg: dict, steps: int) -> None:
         hoomd.write.GSD(
             trigger=hoomd.trigger.Periodic(period=cfg["period"]),
             filename=trajectory,
-            logger=log.get_logger(simulation),
+            logger=get_logger(simulation),
         )
     )
-    simulation.run(steps)
+
+    return simulation
+
+
+def warmup(cfg: dict) -> None:
+    assert cfg["warmup"] % cfg["period"] == 0, "period does not divide warmup"
+    simulation = load_simulation(cfg)
+    simulation.run(steps=cfg["warmup"])
+
+
+def loop_extrusion_1d(
+    cfg: dict, simulation: hoomd.Simulation, steps: int
+) -> np.ndarray:
+    trajectory_1d = compute_LEF_pos(
+        extrusion_engine=LEFTranslocatorDirectional,
+        n_tot=simulation.state.N_particles,
+        trajectory_length=steps,
+        dummy_steps=cfg["1d"]["warmup"],
+        LEF_lifetime=cfg["1d"]["LEF_lifetime"] / cfg["1d"]["tau_1d"],
+        LEF_separation=cfg["1d"]["LEF_separation"],
+        kb_per_site=cfg["bin"],
+    )
+
+    return trajectory_1d
+
+
+def update_topology(
+    simulation, bond_list, xp: cp.__class__ | np.__class__, thermalize=False
+):
+    """Update topology on either GPU or CPU, based on availability"""
+
+    LEF_typeid = simulation.state.bond_types.index("LEF")
+    LEF_dummy_typeid = simulation.state.bond_types.index("LEF_dummy")
+
+    if len(bond_list) > 0:
+        # Discard contiguous loops
+        bond_array = xp.array(bond_list, dtype=xp.int32)
+        type_array = xp.full(len(bond_array), LEF_typeid, dtype=xp.int32)
+
+        redundant_bonds = xp.less(bond_array[:, 1] - bond_array[:, 0], 1)
+        n_prune = int(xp.count_nonzero(redundant_bonds))
+
+        ids = xp.random.randint(
+            low=0, high=simulation.state.N_particles - 1, size=n_prune, dtype=xp.int32
+        )
+
+        bond_array[redundant_bonds] = xp.stack((ids, ids + 1), axis=1)
+        type_array[redundant_bonds] = LEF_dummy_typeid
+
+    else:
+        bond_array = xp.empty(0, dtype=xp.int32)
+        type_array = xp.empty(0, dtype=xp.int32)
+
+    _update_topology_local(
+        simulation, bond_array, type_array, LEF_typeid, LEF_dummy_typeid, xp
+    )
+
+    if thermalize:
+        simulation.state.thermalize_particle_momenta(filter=hoomd.filter.All(), kT=1.0)
+
+
+def _update_topology_local(system, bond_array, type_array, type_id, dummy_id, xp):
+    """Update topology locally on the GPU"""
+    device = "gpu" if xp.__name__ == "cupy" else "cpu"
+    with getattr(system.state, f"{device}_local_snapshot") as local_snap:
+        bond_ids = xp.asarray(local_snap.bonds.typeid)
+
+        is_bound = xp.equal(bond_ids, type_id)
+        is_unbound = xp.equal(bond_ids, dummy_id)
+
+        is_LEF = xp.logical_or(is_bound, is_unbound)
+
+        if bond_array.shape[0] == type_array.shape[0] == xp.count_nonzero(is_LEF):
+            local_snap.bonds.group[is_LEF] = bond_array.astype(xp.uint32)
+            local_snap.bonds.typeid[is_LEF] = type_array.astype(xp.uint32)
+
+        else:
+            raise RuntimeError("Unable to dynamically resize bond arrays on the GPU")
+
+
+def loop_extrusion_3d(cfg: dict, steps: int) -> None:
+    n_3d_to_1d = cfg["1d"]["tau_1d"] / cfg["tau_3d"]
+    assert n_3d_to_1d % cfg["period"] == 0, "period does not divide n_3d_to_1d"
+    simulation = load_simulation(cfg)
+    trajectory_1d = loop_extrusion_1d(cfg, simulation, steps)
+    xp = np if cfg["device"] == "cpu" else cp
+    for bond_list in trajectory_1d:
+        update_topology(simulation, bond_list, xp, thermalize=False)
+        simulation.run(n_3d_to_1d)
+
+
+def draw_trajectory(cfg: dict) -> None:
+    # Visualize starting conformation using the Fresnel backend (A compartments in blue, B in red)
+    (cfg["data_dir"] / "output" / "frames").mkdir(exist_ok=True, parents=True)
+    with gsd.hoomd.open(
+        name=cfg["data_dir"] / "output" / "trajectory.gsd", mode="r"
+    ) as fd:
+        for i, frame in enumerate(fd):
+            polychrom_hoomd.render.fresnel(
+                frame, show="compartments", cmap="coolwarm"
+            ).static(
+                pathtrace=False,
+                png_output_file=cfg["data_dir"]
+                / "output"
+                / "frames"
+                / f"frame-{i}.png",
+            )
