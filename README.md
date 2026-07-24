@@ -1,0 +1,22 @@
+- load mcool from new name instead of wt.mcool
+- call CBS
+- 读取call的CBS（改接口）
+- 可视化模拟结果
+- blender动画可视化
+
+- why force register unrelated bond by vanish parameters?
+- manually set bond and angle N to allow saving.
+- clarify hoomd logger
+
+- cpcdh热图
+  - 画图也要模块化搭积木
+  - 热图边上加margin的函数
+  - 转45度的函数
+  - AB-compartment双色块图
+  - raw热图
+  - balanced热图
+  - o/e热图
+  - correlation热图
+  - 模拟拓扑热图
+  - 高斯平衡热图
+  - 模拟三维热图

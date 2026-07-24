@@ -5,6 +5,8 @@ channels:
   - defaults
 dependencies:
   - genomepy
+  - geofetch
+  - httpx<=0.28.1
   - cooltools
   - hoomd
   - gsd

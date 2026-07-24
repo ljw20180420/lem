@@ -1,22 +1,36 @@
 #!/bin/bash
 
-download_genome() {
-    wget https://hgdownload.soe.ucsc.edu/goldenPath/mm10/bigZips/chromFa.tar.gz -O ${DATA_DIR}/chromFa.tar.gz
+plugin() {
     genomepy plugin enable blacklist
     genomepy plugin enable bowtie2
     genomepy plugin enable bwa
+}
+
+download_genome() {
+    local url=$1
+    local name=$2
+    wget "${url}" -O ${DATA_DIR}/${name}.tar.gz
+    plugin
     genomepy install \
         -p local \
-        -l GRCm38 \
-        ${DATA_DIR}/chromFa.tar.gz
+        -l ${name} \
+        ${DATA_DIR}/${name}.tar.gz
 }
 
-download_hic() {
-    wget \
-        https://ftp.ncbi.nlm.nih.gov/geo/series/GSE279nnn/GSE279296/suppl/GSE279296%5Funtagged%5Funtreated%5Fmerge%2Drep1%2D2%2Emcool \
-        -O ${DATA_DIR}/wt.mcool
+download_geo() {
+    local gse=$1
+    geofetch -i ${gse} \
+        --processed \
+        --data-source all \
+        --geo-folder ${DATA_DIR} \
+        -m ${DATA_DIR}
 }
 
-download_genome
+# download_genome "https://hgdownload.soe.ucsc.edu/goldenPath/mm10/bigZips/chromFa.tar.gz" "GRCm38"
+# download_genome "https://hgdownload.soe.ucsc.edu/goldenPath/mm9/bigZips/chromFa.tar.gz" "GRCm37"
 
-download_hic
+# hic
+download_geo GSE279296
+
+# ctcf chip-exp
+# download_geo GSE235386

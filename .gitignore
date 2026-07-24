@@ -3,3 +3,4 @@ __pycache__
 /run.py
 /polychrom_hoomd
 /polykit
+/Dockerfile
