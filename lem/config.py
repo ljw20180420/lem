@@ -49,7 +49,11 @@ def cpcdh() -> dict:
         "data_dir": data_dir,
         "CBS": {"tCBS": "tCBS.csv"},
         "genome": "/home/ljw/.local/share/genomes/GRCm38/GRCm38.fa",
-        "hic": os.fspath(data_dir / "wt.mcool::resolutions/10000"),
+        "hic": os.fspath(
+            data_dir
+            / "GSE279296"
+            / "GSE279296_untagged_untreated_merge-rep1-2.mcool::resolutions/10000"
+        ),
         "chrom": "chr18",
         "start": 36900000,
         "end": 37900000,

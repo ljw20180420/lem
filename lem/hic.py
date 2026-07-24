@@ -1,9 +1,12 @@
+import os
+
 import bioframe as bf
 import cooler
 import cooltools
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from Bio import Seq
 from matplotlib.ticker import EngFormatter
 
 
@@ -67,6 +70,38 @@ def align_E1(cfg: dict) -> None:
         columns={"AB_": "AB"}
     )
     df_AB.to_csv(cfg["data_dir"] / "output" / "AB.csv", index=False)
+
+
+def bed2seq(
+    bed: os.PathLike,
+    genome: os.PathLike = "/home/ljw/.local/share/genomes/GRCm38/GRCm38.fa",
+) -> None:
+    df = pd.read_csv(bed)
+    for chrom, start, end, strand in zip(
+        df["chrom"], df["start"], df["end"], df["strand"]
+    ):
+        seq = genome.get(chrom).ff.fetch(chrom, start, end).upper()
+        if strand == "-":
+            seq = str(Seq.Seq(seq).reverse_complement())
+
+        print(seq)
+
+
+def find_CBS(cfg: dict):
+    df = pd.read_csv(
+        cfg["data_dir"] / "GSE235386" / "GSM7501570_esc.bed.gz",
+        sep="\t",
+        names=["chrom", "start", "end"],
+    )
+    range = pd.DataFrame({
+        "chrom": [cfg["chrom"]],
+        "start": [cfg["start"]],
+        "end": [cfg["end"]],
+    })
+    df_CBS = bf.overlap(df, range, how="inner")[["chrom", "start", "end"]]
+    pCBS = pd.read_csv(cfg["data_dir"] / "pCBS.csv", header=0)
+    df_pCBS = bf.overlap(df_CBS, pCBS, how="inner")
+    breakpoint()
 
 
 def align_CBS(cfg: dict) -> None:

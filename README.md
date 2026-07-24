@@ -1,4 +1,3 @@
-- load mcool from new name instead of wt.mcool
 - call CBS
 - 读取call的CBS（改接口）
 - 可视化模拟结果
