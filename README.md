@@ -1,11 +1,8 @@
-- call CBS
+- call pCBS/eCBS/tCBS
+- call other CBS in cpcdh
 - 读取call的CBS（改接口）
 - 可视化模拟结果
 - blender动画可视化
-
-- why force register unrelated bond by vanish parameters?
-- manually set bond and angle N to allow saving.
-- clarify hoomd logger
 
 - cpcdh热图
   - 画图也要模块化搭积木

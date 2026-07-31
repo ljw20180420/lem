@@ -4,8 +4,6 @@ channels:
   - bioconda
   - defaults
 dependencies:
-  - genomepy
-  - geofetch
   - httpx<=0.28.1
   - cooltools
   - hoomd

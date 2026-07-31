@@ -51,7 +51,6 @@ def cpcdh() -> dict:
         "genome": "/home/ljw/.local/share/genomes/GRCm38/GRCm38.fa",
         "hic": os.fspath(
             data_dir
-            / "GSE279296"
             / "GSE279296_untagged_untreated_merge-rep1-2.mcool::resolutions/10000"
         ),
         "chrom": "chr18",

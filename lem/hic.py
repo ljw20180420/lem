@@ -4,10 +4,40 @@ import bioframe as bf
 import cooler
 import cooltools
 import matplotlib.pyplot as plt
-import numpy as np
 import pandas as pd
 from Bio import Seq
+from matplotlib.axes import Axes
+from matplotlib.colors import LinearSegmentedColormap
+from matplotlib.figure import Figure
 from matplotlib.ticker import EngFormatter
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+from numpy.typing import ArrayLike
+
+
+def _white2red() -> LinearSegmentedColormap:
+    return LinearSegmentedColormap(
+        name="white2red",
+        segmentdata={
+            "red": [(0.0, 1.0, 1.0), (1.0, 1.0, 1.0)],
+            "green": [(0.0, 1.0, 1.0), (1.0, 0.0, 0.0)],
+            "blue": [(0.0, 1.0, 1.0), (1.0, 0.0, 0.0)],
+        },
+    )
+
+
+def _heatmap(mat: ArrayLike, chrom: str, start: int, end: int) -> tuple[Figure, Axes]:
+    fig, ax = plt.subplots(figsize=(7, 6))
+    im = ax.matshow(mat, extent=[start, end, start, end], vmin=0, cmap=_white2red())
+    fig.colorbar(im, fraction=0.046, pad=0.04)
+    ax.xaxis.set_major_formatter(EngFormatter("b"))
+    ax.yaxis.set_major_formatter(EngFormatter("b"))
+    ax.xaxis.set_label_position("top")
+    ax.xaxis.set_tick_params(rotation=45)
+    ax.set_xlabel(chrom)
+    ax.set_ylabel(chrom)
+    fig.tight_layout()
+
+    return fig, ax
 
 
 def get_E1(cfg: dict) -> None:
@@ -35,16 +65,21 @@ def get_E1(cfg: dict) -> None:
     (cfg["data_dir"] / "output").mkdir(exist_ok=True, parents=True)
     df_E1.to_csv(cfg["data_dir"] / "output" / "E1.csv", index=False)
 
-    bp_formatter = EngFormatter("b")
-    ax = df_E1.plot(x="start", y="E1")
-    ax.xaxis.set_major_formatter(bp_formatter)
-    ax.set_xticks(
-        np.arange(cfg["start"], cfg["end"], 100000),
-    )
-    ax.tick_params(axis="x", labelrotation=45)
-    fig = ax.get_figure()
-    fig.tight_layout()
-    fig.savefig(cfg["data_dir"] / "output" / "E1.pdf")
+
+def heatmap(cfg: dict) -> None:
+    clr = cooler.Cooler(cfg["hic"])
+    mat = clr.matrix(balance=False).fetch((cfg["chrom"], cfg["start"], cfg["end"]))
+    fig, ax = _heatmap(mat, cfg["chrom"], cfg["start"], cfg["end"])
+
+    divider = make_axes_locatable(ax)
+    top_ax = divider.append_axes("top", size="10%", pad=0.1, sharex=ax)
+    df_E1 = pd.read_csv(cfg["data_dir"] / "output" / "E1.csv", header=0)
+    df_E1.melt(id_vars=["chrom", "E1"])
+    breakpoint()
+    # Add AB compartment
+    top_ax.plot()
+
+    fig.savefig(cfg["data_dir"] / "output" / "heatmap.png")
     plt.close(fig)
 
 

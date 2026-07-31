@@ -352,7 +352,7 @@ def loop_extrusion_1d(cfg: dict, steps: int):
     pauseProb1 = np.zeros(N_particles, dtype=np.double)
     pauseProb2 = np.zeros(N_particles, dtype=np.double)
     df_AB_CBS = pd.read_csv(cfg["data_dir"] / "output" / "AB_CBS.csv", header=0)
-    for name in cfg["CBS"].keys():
+    for name in cfg["CBS"]:
         fCBS = np.tile((df_AB_CBS[name] == "+").to_numpy(), cfg["n_copies"])
         pauseProb1[fCBS] = cfg["1d"]["pause"]
         rCBS = np.tile((df_AB_CBS[name] == "-").to_numpy(), cfg["n_copies"])
