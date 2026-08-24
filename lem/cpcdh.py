@@ -20,7 +20,7 @@ def get_cpcdh_exon(gtffile: os.PathLike) -> pd.DataFrame:
         ],
     )
     df = df.query(
-        "chrom == 'chr18' and attributes.str.contains(r'Pcdh[abg][abc]?[0-9]{1,2}') and feature=='exon'"
+        "chrom == 'chr18' and attributes.str.contains(r'Pcdh[abg][abc]?[0-9]{1,2}') and (feature=='exon' or feature=='CDS')"
     ).reset_index(drop=True)
     attributes = df["attributes"].str.split(expand=True)
     df = df.assign(
@@ -32,7 +32,6 @@ def get_cpcdh_exon(gtffile: os.PathLike) -> pd.DataFrame:
         ].transform(max),
     ).drop(
         columns=[
-            "feature",
             "source",
             "score",
             "frame",
@@ -42,11 +41,11 @@ def get_cpcdh_exon(gtffile: os.PathLike) -> pd.DataFrame:
 
     df = (
         df
+        .query("transcript_id.str.startswith('NM')")
         .query(
             "exon_number == 1 and (total_exon_number == 4 or name.str.contains(r'^Pcdhb')) or name == 'Pcdha1' or name == 'Pcdhga1'"
         )
         .reset_index(drop=True)
-        .assign(score=".")
     )
     for exon in ["Pcdha1", "Pcdhga1"]:
         for exon_number in [2, 3, 4]:
@@ -55,8 +54,29 @@ def get_cpcdh_exon(gtffile: os.PathLike) -> pd.DataFrame:
                 (df["exon_number"] == exon_number) & (df["name"] == exon), "name"
             ] = f"{prefix}{exon_number - 1}"
 
-    df = df[["chrom", "start", "end", "name", "score", "strand"]].sort_values(
-        by=["start", "end"], ignore_index=True
+    df = df.pivot_table(
+        values=["start", "end"],
+        index=["chrom", "strand", "name", "transcript_id"],
+        columns="feature",
+    )
+    df.columns = df.columns.to_flat_index().map(lambda tp: f"{tp[1]}_{tp[0]}")
+
+    df = (
+        df
+        .reset_index()
+        .rename(columns={"exon_start": "start", "exon_end": "end"})
+        .assign(score=".")[
+            ["chrom", "start", "end", "name", "score", "strand", "CDS_start", "CDS_end"]
+        ]
+        .assign(
+            CDS_start=lambda df: df["CDS_start"].fillna("."),
+            CDS_end=lambda df: df["CDS_end"].fillna("."),
+        )
+        .sort_values(by=["start", "end"], ignore_index=True)
+        .astype({
+            "start": int,
+            "end": int,
+        })
     )
 
     return df
