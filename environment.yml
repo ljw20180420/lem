@@ -18,3 +18,4 @@ dependencies:
   - ipython
   - ipykernel
   - py2bit
+  - crossmap

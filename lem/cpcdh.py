@@ -24,6 +24,7 @@ def get_cpcdh_exon(gtffile: os.PathLike) -> pd.DataFrame:
     ).reset_index(drop=True)
     attributes = df["attributes"].str.split(expand=True)
     df = df.assign(
+        start=lambda df: df["start"] - 1,
         name=attributes[9].str.strip('";'),
         transcript_id=attributes[3].str.strip('";'),
         exon_number=attributes[5].str.strip('";').astype(int),

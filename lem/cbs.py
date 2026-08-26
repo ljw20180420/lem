@@ -1,6 +1,10 @@
 import os
+import subprocess
 
+import numpy as np
 import pandas as pd
+from Bio import motifs
+from Bio.Seq import Seq
 
 
 def get_pCBS(shift_file: os.PathLike, cpcdh_file: os.PathLike) -> pd.DataFrame:
@@ -17,8 +21,22 @@ def get_pCBS(shift_file: os.PathLike, cpcdh_file: os.PathLike) -> pd.DataFrame:
         "CDS_end": int,
     })
     df = df.assign(
-        end=lambda df: df["CDS_start"] + df["shift"] + 1,
-        start=lambda df: df["end"] - 42,
+        end=lambda df: df["CDS_start"] + df["shift"] + 2,
+        start=lambda df: df["end"] - 27,
     )[["chrom", "start", "end", "name", "score", "strand"]]
 
     return df
+
+
+def get_motif(
+    cfg: dict, seq_file: os.PathLike, matrix_file: os.PathLike, meme_file: os.PathLike
+):
+    df = pd.read_csv(seq_file, header=0)
+    m = motifs.create([Seq(seq) for seq in df["seq"]])
+
+    matrix = np.array([m.counts[base] for base in ["A", "C", "G", "T"]])
+    np.savetxt(matrix_file, matrix, fmt="%d")
+    subprocess.run(
+        args=[f"matrix2meme <{os.fspath(matrix_file)} >{os.fspath(meme_file)}"],
+        shell=True,
+    )

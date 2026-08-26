@@ -1,5 +1,9 @@
 - call pCBS/eCBS/tCBS
 - call other CBS in cpcdh
+- remove CBS without peak
+  - call peak
+  - check peak align signals
+  - remove CBS without peak
 - 读取call的CBS（改接口）
 - 可视化模拟结果
 - blender动画可视化
