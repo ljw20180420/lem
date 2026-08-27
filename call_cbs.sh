@@ -4,11 +4,10 @@ extract_DNA() {
     local chrom=$1
     local start=$2
     local end=$3
-    local strand=$4
 
     bed2fasta -s \
         <(
-            printf "%s\t%d\t%d\t.\t.\t%s\n" ${chrom} ${start} ${end} ${strand}
+            printf "%s\t%d\t%d\t.\t.\t+\n" ${chrom} ${start} ${end}
         ) \
         ${genome}
 }
@@ -17,16 +16,15 @@ find_jaspar_motif() {
     local chrom=$1
     local start=$2
     local end=$3
-    local strand=$4
 
     if [[ ! -f "versions.meme" ]]
     then
         wget https://jaspar.elixir.no/api/v1/matrix/MA0139/versions.meme
     fi
 
-    extract_DNA ${chrom} ${start} ${end} ${strand} |
+    extract_DNA ${chrom} ${start} ${end} |
     fimo --text \
-        --norc \
+        --thresh 0.001 \
         --motif MA0139.1 \
         versions.meme -
 }
@@ -35,9 +33,8 @@ find_eCBS_motif() {
     local chrom=$1
     local start=$2
     local end=$3
-    local strand=$4
 
-    extract_DNA ${chrom} ${start} ${end} ${strand} |
+    extract_DNA ${chrom} ${start} ${end} |
     fimo --text \
         --norc \
         ${data_dir}/result/eCBS.meme -
