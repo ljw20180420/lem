@@ -46,6 +46,12 @@ find_motif() {
     local start=$3
     local end=$4
 
+    if [ "${meme,,}" == "jaspar" ]
+    then
+        find_jaspar_motif ${chrom} ${start} ${end}
+        return
+    fi
+
     extract_DNA ${chrom} ${start} ${end} |
     fimo --text \
         --thresh 0.001 \
