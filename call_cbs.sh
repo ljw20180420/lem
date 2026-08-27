@@ -40,20 +40,19 @@ find_eCBS_motif() {
         ${data_dir}/result/eCBS.meme -
 }
 
+find_motif() {
+    local meme=$1
+    local chrom=$2
+    local start=$3
+    local end=$4
+
+    extract_DNA ${chrom} ${start} ${end} |
+    fimo --text \
+        --thresh 0.001 \
+        ${meme} -
+}
+
 data_dir="/home/ljw/sdc1/cpcdh"
 genome="/home/ljw/.local/share/genomes/GRCm38/GRCm38.fa"
 
-if [[ "${1,,}" == "jaspar" ]]
-then
-    cmd="find_jaspar_motif"
-elif [[ "${1,,}" == "ecbs" ]]
-then
-    cmd="find_eCBS_motif"
-else
-    echo "command is jaspar or ecbs" >&2
-    exit 1
-fi
-
-shift
-
-${cmd} "$@"
+find_motif "$@"
