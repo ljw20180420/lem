@@ -54,7 +54,7 @@ find_motif() {
 
     extract_DNA ${chrom} ${start} ${end} |
     fimo --text \
-        --thresh 0.001 \
+        --thresh 0.002 \
         ${meme} -
 }
 
