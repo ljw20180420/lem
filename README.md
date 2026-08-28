@@ -1,5 +1,3 @@
-- call pCBS/eCBS/tCBS
-- call other CBS in cpcdh
 - remove CBS without peak
   - call peak
   - check peak align signals

@@ -50,7 +50,7 @@ def correct_tCBS(cfg) -> None:
     )
 
     seqs = []
-    with py2bit.open("/home/ljw/sdb1/ucsc/hubs/myHub/lmm10/lmm10.2bit") as tb:
+    with py2bit.open(cfg["2bit"]) as tb:
         for chrom, start, end, strand in zip(
             df["chrom"], df["start"], df["end"], df["strand"]
         ):
@@ -113,3 +113,23 @@ def update_tCBS_score() -> None:
 
     df["score"] = scores
     df.to_csv("tCBS.bed", sep="\t", index=False, header=False)
+
+
+def bed2seq(
+    cfg: dict,
+    bed: os.PathLike,
+) -> None:
+    df = pd.read_csv(
+        bed,
+        sep="\t",
+        names=["chrom", "start", "end", "name", "score", "strand"],
+    )
+
+    with py2bit.open(cfg["2bit"]) as tb:
+        for chrom, start, end, name, strand in zip(
+            df["chrom"], df["start"], df["end"], df["name"], df["strand"]
+        ):
+            seq = tb.sequence(chrom, start, end)
+            if strand == "-":
+                seq = str(Seq(seq).reverse_complement())
+            print(seq, name)

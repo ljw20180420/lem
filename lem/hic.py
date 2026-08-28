@@ -25,21 +25,6 @@ def _white2red() -> LinearSegmentedColormap:
     )
 
 
-def _heatmap(mat: ArrayLike, chrom: str, start: int, end: int) -> tuple[Figure, Axes]:
-    fig, ax = plt.subplots(figsize=(7, 6))
-    im = ax.matshow(mat, extent=[start, end, start, end], vmin=0, cmap=_white2red())
-    fig.colorbar(im, fraction=0.046, pad=0.04)
-    ax.xaxis.set_major_formatter(EngFormatter("b"))
-    ax.yaxis.set_major_formatter(EngFormatter("b"))
-    ax.xaxis.set_label_position("top")
-    ax.xaxis.set_tick_params(rotation=45)
-    ax.set_xlabel(chrom)
-    ax.set_ylabel(chrom)
-    fig.tight_layout()
-
-    return fig, ax
-
-
 def get_E1(cfg: dict) -> None:
     clr = cooler.Cooler(cfg["hic"])
     bins = clr.bins().fetch((cfg["chrom"], cfg["start"], cfg["end"]))
@@ -62,29 +47,51 @@ def get_E1(cfg: dict) -> None:
         E1=lambda df: df["E1"].interpolate()
     )
 
-    (cfg["data_dir"] / "output").mkdir(exist_ok=True, parents=True)
-    df_E1.to_csv(cfg["data_dir"] / "output" / "E1.csv", index=False)
+    (cfg["data_dir"] / "result" / "hic").mkdir(exist_ok=True, parents=True)
+    df_E1.to_csv(cfg["data_dir"] / "result" / "hic" / "E1.csv", index=False)
 
 
 def heatmap(cfg: dict) -> None:
     clr = cooler.Cooler(cfg["hic"])
-    mat = clr.matrix(balance=False).fetch((cfg["chrom"], cfg["start"], cfg["end"]))
-    fig, ax = _heatmap(mat, cfg["chrom"], cfg["start"], cfg["end"])
+    chrom, start, end = cfg["chrom"], cfg["start"], cfg["end"]
+    mat = clr.matrix(balance=False).fetch((chrom, start, end))
+
+    fig, ax = plt.subplots(figsize=(7, 6))
+    im = ax.matshow(mat, extent=[start, end, start, end], vmin=0, cmap=_white2red())
+    fig.colorbar(im, fraction=0.046, pad=0.04)
+    ax.xaxis.set_major_formatter(EngFormatter("b"))
+    ax.yaxis.set_major_formatter(EngFormatter("b"))
+    ax.xaxis.set_ticks_position("bottom")
+    ax.xaxis.set_label_position("bottom")
+    ax.xaxis.set_tick_params(rotation=45)
+    ax.set_xlabel(chrom)
+    ax.set_ylabel(chrom)
 
     divider = make_axes_locatable(ax)
-    top_ax = divider.append_axes("top", size="10%", pad=0.1, sharex=ax)
-    df_E1 = pd.read_csv(cfg["data_dir"] / "output" / "E1.csv", header=0)
-    df_E1.melt(id_vars=["chrom", "E1"])
-    breakpoint()
+    top_ax: Axes = divider.append_axes("top", size="10%", pad=0.1, sharex=ax)
+    df_E1 = pd.read_csv(cfg["data_dir"] / "result" / "hic" / "E1.csv", header=0)
+    df_E1 = df_E1.melt(
+        id_vars=["chrom", "E1"],
+        value_vars=["start", "end"],
+        var_name="se",
+        value_name="pos",
+    ).sort_values([
+        "pos",
+        "se",
+    ])  # sort the end of the current bin before the start of the next bin
     # Add AB compartment
-    top_ax.plot()
+    top_ax.plot(df_E1["pos"], df_E1["E1"], "k-")
+    top_ax.tick_params(labelbottom=False)
+    top_ax.set_xlabel(None)
+    top_ax.set_ylabel("E1")
 
-    fig.savefig(cfg["data_dir"] / "output" / "heatmap.png")
+    fig.tight_layout()
+    fig.savefig(cfg["data_dir"] / "result" / "hic" / "heatmap.pdf")
     plt.close(fig)
 
 
 def align_E1(cfg: dict) -> None:
-    df_E1 = pd.read_csv(cfg["data_dir"] / "output" / "E1.csv", header=0).assign(
+    df_E1 = pd.read_csv(cfg["data_dir"] / "result" / "hic" / "E1.csv", header=0).assign(
         AB=lambda df: pd.cut(
             df["E1"], bins=[-float("inf"), 0, float("inf")], labels=["B", "A"]
         )
@@ -104,22 +111,7 @@ def align_E1(cfg: dict) -> None:
     df_AB = bf.closest(df_bin, df_E1)[["chrom", "start", "end", "AB_"]].rename(
         columns={"AB_": "AB"}
     )
-    df_AB.to_csv(cfg["data_dir"] / "output" / "AB.csv", index=False)
-
-
-def bed2seq(
-    bed: os.PathLike,
-    genome: os.PathLike = "/home/ljw/.local/share/genomes/GRCm38/GRCm38.fa",
-) -> None:
-    df = pd.read_csv(bed)
-    for chrom, start, end, strand in zip(
-        df["chrom"], df["start"], df["end"], df["strand"]
-    ):
-        seq = genome.get(chrom).ff.fetch(chrom, start, end).upper()
-        if strand == "-":
-            seq = str(Seq.Seq(seq).reverse_complement())
-
-        print(seq)
+    df_AB.to_csv(cfg["data_dir"] / "result" / "hic" / "AB.csv", index=False)
 
 
 def find_CBS(cfg: dict):

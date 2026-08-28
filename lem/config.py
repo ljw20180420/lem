@@ -47,10 +47,17 @@ def cpcdh() -> dict:
 
     return {
         "data_dir": data_dir,
-        "CBS": {"tCBS": "tCBS.csv"},
+        "CBS": {
+            "pCBS": data_dir / "result" / "pCBS.bed",
+            "eCBS": "eCBS.bed",
+            "tCBS": data_dir / "data" / "tCBS_ltj_mm10.bed",
+            "oCBS": "oCBS.bed",
+        },
         "genome": "/home/ljw/.local/share/genomes/GRCm38/GRCm38.fa",
+        "2bit": "/home/ljw/sdb1/ucsc/hubs/myHub/lmm10/lmm10.2bit",
         "hic": os.fspath(
             data_dir
+            / "data"
             / "GSE279296_untagged_untreated_merge-rep1-2.mcool::resolutions/10000"
         ),
         "chrom": "chr18",
