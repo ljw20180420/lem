@@ -24,7 +24,7 @@ find_jaspar_motif() {
 
     extract_DNA ${chrom} ${start} ${end} |
     fimo --text \
-        --thresh 0.001 \
+        --thresh ${thres} \
         --motif MA0139.1 \
         versions.meme -
 }
@@ -36,6 +36,7 @@ find_eCBS_motif() {
 
     extract_DNA ${chrom} ${start} ${end} |
     fimo --text \
+        --thresh ${thres}
         --norc \
         ${data_dir}/result/eCBS.meme -
 }
@@ -46,19 +47,40 @@ find_motif() {
     local start=$3
     local end=$4
 
-    if [ "${meme,,}" == "jaspar" ]
+    if [[ "${meme,,}" == "jaspar" ]]
     then
         find_jaspar_motif ${chrom} ${start} ${end}
         return
     fi
 
+    if [[ "${meme,,}" == "ecbs" ]]
+    then
+        find_eCBS_motif ${chrom} ${start} ${end}
+        return
+    fi
+
+    if [[ "${meme,,}" == "t" ]]
+    then
+        local meme="${data_dir}/result/tCBS.meme"
+    elif [[ "${meme,,}" == "ta" ]]
+    then
+        local meme="${data_dir}/result/tCBS.alpha.meme"
+    elif [[ "${meme,,}" == "tb" ]]
+    then
+        local meme="${data_dir}/result/tCBS.beta.meme"
+    elif [[ "${meme,,}" == "tg" ]]
+    then
+        local meme="${data_dir}/result/tCBS.gamma.meme"
+    fi
+
     extract_DNA ${chrom} ${start} ${end} |
     fimo --text \
-        --thresh 0.002 \
+        --thresh ${thres} \
         ${meme} -
 }
 
 data_dir="/home/ljw/sdc1/cpcdh"
 genome="/home/ljw/.local/share/genomes/GRCm38/GRCm38.fa"
+thres=0.001
 
 find_motif "$@"

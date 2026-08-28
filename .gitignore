@@ -4,7 +4,4 @@ __pycache__
 /polychrom_hoomd
 /polykit
 /versions.meme
-/correct.csv
-/correct.meme
-/correct.txt
-/tCBS.bed.changed
+/tCBS.bed.bak

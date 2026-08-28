@@ -1,6 +1,5 @@
 import io
 import os
-import pathlib
 import subprocess
 
 import numpy as np
@@ -45,13 +44,13 @@ def get_motif(seq_file: os.PathLike, matrix_file: os.PathLike, meme_file: os.Pat
     )
 
 
-def correct_motif(site_file: os.PathLike, two_bit_file: os.PathLike) -> None:
+def correct_tCBS(cfg) -> None:
     df = pd.read_csv(
-        site_file, sep="\t", names=["chrom", "start", "end", "name", "score", "strand"]
+        "tCBS.bed", sep="\t", names=["chrom", "start", "end", "name", "score", "strand"]
     )
 
     seqs = []
-    with py2bit.open(two_bit_file) as tb:
+    with py2bit.open("/home/ljw/sdb1/ucsc/hubs/myHub/lmm10/lmm10.2bit") as tb:
         for chrom, start, end, strand in zip(
             df["chrom"], df["start"], df["end"], df["strand"]
         ):
@@ -61,91 +60,56 @@ def correct_motif(site_file: os.PathLike, two_bit_file: os.PathLike) -> None:
             seqs.append(seq)
 
     pd.DataFrame({"gene": df["name"], "seq": seqs}).to_csv(
-        "correct.csv", header=["gene", "seq"], index=False
+        cfg["data_dir"] / "result" / "tCBS.csv", header=["gene", "seq"], index=False
     )
+
     get_motif(
-        seq_file="correct.csv",
-        matrix_file=pathlib.Path("correct.txt"),
-        meme_file=pathlib.Path("correct.meme"),
+        seq_file=cfg["data_dir"] / "result" / "tCBS.csv",
+        matrix_file=cfg["data_dir"] / "result" / "tCBS.txt",
+        meme_file=cfg["data_dir"] / "result" / "tCBS.meme",
     )
 
-    chroms = []
-    starts = []
-    ends = []
-    scores = []
-    strands = []
+    for cluster, prefix in zip(["alpha", "beta", "gamma"], ["Pcdha", "Pcdhb", "Pcdhg"]):
+        pd.read_csv(cfg["data_dir"] / "result" / "tCBS.csv", header=0).query(
+            "gene.str.startswith(@prefix)"
+        ).to_csv(cfg["data_dir"] / "result" / f"tCBS.{cluster}.csv", index=False)
 
-    chroms_changed = []
-    starts_changed = []
-    ends_changed = []
-    names_changed = []
-    scores_changed = []
-    strands_changed = []
+        get_motif(
+            seq_file=cfg["data_dir"] / "result" / f"tCBS.{cluster}.csv",
+            matrix_file=cfg["data_dir"] / "result" / f"tCBS.{cluster}.txt",
+            meme_file=cfg["data_dir"] / "result" / f"tCBS.{cluster}.meme",
+        )
+
+
+def update_tCBS_score() -> None:
+    df = pd.read_csv(
+        "tCBS.bed", sep="\t", names=["chrom", "start", "end", "name", "score", "strand"]
+    )
+    df.to_csv("tCBS.bed.bak", sep="\t", index=False, header=False)
+
+    scores = []
     for chrom, start, end, name, score, strand in df.itertuples(index=False):
-        peak_start = start - 500
-        peak_end = end + 500
+        if name.startswith("Pcdha"):
+            cmd = "ta"
+        elif name.startswith("Pcdhb"):
+            cmd = "tb"
+        elif name.startswith("Pcdhg"):
+            cmd = "tg"
+        else:
+            raise ValueError("Unknown name prefix")
+
         proc = subprocess.run(
-            args=[
-                "./call_cbs.sh",
-                "correct.meme",
-                chrom,
-                f"{peak_start}",
-                f"{peak_end}",
-            ],
+            args=["./call_cbs.sh", cmd, chrom, str(start), str(end)],
             check=True,
             capture_output=True,
             text=True,
         )
 
-        try:
-            df_fimo = (
-                pd
-                .read_csv(io.StringIO(proc.stdout), sep="\t")
-                .query("strand == @strand")
-                .reset_index(drop=True)
-            )
-        except pd.errors.EmptyDataError as e:
-            print(name)
-            raise e
-        if len(df_fimo) == 0:
-            print(name)
-            raise Exception("No correct strand found")
-
+        df_fimo = pd.read_csv(io.StringIO(proc.stdout), sep="\t", header=0)
         max_row = df_fimo.loc[df_fimo["score"].idxmax()]
-
-        chroms.append(max_row["sequence_name"])
-        starts.append(max_row["start"])
-        ends.append(max_row["stop"] + 1)
+        if max_row["strand"] != strand:
+            raise ValueError("Inconsistent strand")
         scores.append(max_row["score"])
-        strands.append(max_row["strand"])
 
-        if (
-            max_row["sequence_name"] != chrom
-            or max_row["start"] != start
-            or max_row["stop"] + 1 != end
-            or max_row["strand"] != strand
-        ):
-            chroms_changed.append(chrom)
-            starts_changed.append(start)
-            ends_changed.append(end)
-            names_changed.append(name)
-            scores_changed.append(score)
-            strands_changed.append(strand)
-
-    pd.DataFrame({
-        "chrom": chroms,
-        "start": starts,
-        "end": ends,
-        "name": df["name"],
-        "score": scores,
-        "strand": strands,
-    }).to_csv(site_file, sep="\t", header=False, index=False)
-
-    pd.DataFrame({
-        "chrom": chroms_changed,
-        "start": starts_changed,
-        "end": ends_changed,
-        "name": names_changed,
-        "score": scores_changed,
-        "strand": strands_changed,
-    }).to_csv(f"{os.fspath(site_file)}.changed", sep="\t", header=False, index=False)
+    df["score"] = scores
+    df.to_csv("tCBS.bed", sep="\t", index=False, header=False)
