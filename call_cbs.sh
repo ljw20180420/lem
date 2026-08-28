@@ -38,7 +38,7 @@ find_eCBS_motif() {
     fimo --text \
         --thresh ${thres}
         --norc \
-        ${data_dir}/result/eCBS.meme -
+        ${data_dir}/result/CBS/eCBS.meme -
 }
 
 find_motif() {
@@ -61,16 +61,16 @@ find_motif() {
 
     if [[ "${meme,,}" == "t" ]]
     then
-        local meme="${data_dir}/result/tCBS.meme"
+        local meme="${data_dir}/result/CBS/tCBS.meme"
     elif [[ "${meme,,}" == "ta" ]]
     then
-        local meme="${data_dir}/result/tCBS.alpha.meme"
+        local meme="${data_dir}/result/CBS/tCBS.alpha.meme"
     elif [[ "${meme,,}" == "tb" ]]
     then
-        local meme="${data_dir}/result/tCBS.beta.meme"
+        local meme="${data_dir}/result/CBS/tCBS.beta.meme"
     elif [[ "${meme,,}" == "tg" ]]
     then
-        local meme="${data_dir}/result/tCBS.gamma.meme"
+        local meme="${data_dir}/result/CBS/tCBS.gamma.meme"
     fi
 
     extract_DNA ${chrom} ${start} ${end} |

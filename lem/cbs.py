@@ -9,9 +9,9 @@ from Bio import motifs
 from Bio.Seq import Seq
 
 
-def get_pCBS(shift_file: os.PathLike, cpcdh_file: os.PathLike) -> pd.DataFrame:
-    df_shift = pd.read_csv(shift_file, header=0)
-    df_cpcdh = pd.read_csv(cpcdh_file, header=0)
+def get_pCBS(cfg: dict) -> None:
+    df_shift = pd.read_csv("pCBS_shift.txt", header=0)
+    df_cpcdh = pd.read_csv(cfg["data_dir"] / "result" / "cpcdh.csv", header=0)
     df = df_shift.merge(
         right=df_cpcdh, how="inner", left_on="gene", right_on="name", validate="1:1"
     )
@@ -27,8 +27,13 @@ def get_pCBS(shift_file: os.PathLike, cpcdh_file: os.PathLike) -> pd.DataFrame:
         start=lambda df: df["end"] - 27,
         score=0,
     )[["chrom", "start", "end", "name", "score", "strand"]]
-
-    return df
+    (cfg["data_dir"] / "result" / "CBS").mkdir(exist_ok=True, parents=True)
+    df.to_csv(
+        cfg["data_dir"] / "result" / "CBS" / "pCBS.bed",
+        sep="\t",
+        header=False,
+        index=False,
+    )
 
 
 def get_motif(seq_file: os.PathLike, matrix_file: os.PathLike, meme_file: os.PathLike):
@@ -44,7 +49,16 @@ def get_motif(seq_file: os.PathLike, matrix_file: os.PathLike, meme_file: os.Pat
     )
 
 
-def correct_tCBS(cfg) -> None:
+def get_eCBS_motif(cfg: dict) -> None:
+    (cfg["data_dir"] / "result" / "CBS").mkdir(exist_ok=True, parents=True)
+    get_motif(
+        seq_file="human_eCBS.csv",
+        matrix_file=cfg["data_dir"] / "result" / "CBS" / "eCBS.txt",
+        meme_file=cfg["data_dir"] / "result" / "CBS" / "eCBS.meme",
+    )
+
+
+def correct_tCBS(cfg: dict) -> None:
     df = pd.read_csv(
         "tCBS.bed", sep="\t", names=["chrom", "start", "end", "name", "score", "strand"]
     )
@@ -63,10 +77,12 @@ def correct_tCBS(cfg) -> None:
         cfg["data_dir"] / "result" / "tCBS.csv", header=["gene", "seq"], index=False
     )
 
+    (cfg["data_dir"] / "result" / "CBS").mkdir(exist_ok=True, parents=True)
+
     get_motif(
-        seq_file=cfg["data_dir"] / "result" / "tCBS.csv",
-        matrix_file=cfg["data_dir"] / "result" / "tCBS.txt",
-        meme_file=cfg["data_dir"] / "result" / "tCBS.meme",
+        seq_file=cfg["data_dir"] / "result" / "CBS" / "tCBS.csv",
+        matrix_file=cfg["data_dir"] / "result" / "CBS" / "tCBS.txt",
+        meme_file=cfg["data_dir"] / "result" / "CBS" / "tCBS.meme",
     )
 
     for cluster, prefix in zip(["alpha", "beta", "gamma"], ["Pcdha", "Pcdhb", "Pcdhg"]):
@@ -75,9 +91,9 @@ def correct_tCBS(cfg) -> None:
         ).to_csv(cfg["data_dir"] / "result" / f"tCBS.{cluster}.csv", index=False)
 
         get_motif(
-            seq_file=cfg["data_dir"] / "result" / f"tCBS.{cluster}.csv",
-            matrix_file=cfg["data_dir"] / "result" / f"tCBS.{cluster}.txt",
-            meme_file=cfg["data_dir"] / "result" / f"tCBS.{cluster}.meme",
+            seq_file=cfg["data_dir"] / "result" / "CBS" / f"tCBS.{cluster}.csv",
+            matrix_file=cfg["data_dir"] / "result" / "CBS" / f"tCBS.{cluster}.txt",
+            meme_file=cfg["data_dir"] / "result" / "CBS" / f"tCBS.{cluster}.meme",
         )
 
 

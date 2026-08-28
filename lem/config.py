@@ -48,9 +48,9 @@ def cpcdh() -> dict:
     return {
         "data_dir": data_dir,
         "CBS": {
-            "pCBS": data_dir / "result" / "pCBS.bed",
+            "pCBS": data_dir / "result" / "CBS" / "pCBS.bed",
             "eCBS": "eCBS.bed",
-            "tCBS": data_dir / "data" / "tCBS_ltj_mm10.bed",
+            "tCBS": data_dir / "result" / "peak" / "tCBS_ltj_mm10.bed",
             "oCBS": "oCBS.bed",
         },
         "genome": "/home/ljw/.local/share/genomes/GRCm38/GRCm38.fa",

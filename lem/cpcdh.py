@@ -3,9 +3,9 @@ import os
 import pandas as pd
 
 
-def get_cpcdh_exon(gtffile: os.PathLike) -> pd.DataFrame:
+def get_cpcdh_exon(cfg: dict) -> None:
     df = pd.read_csv(
-        gtffile,
+        cfg["data_dir"] / "data" / "mm10.refGene.gtf.gz",
         sep="\t",
         names=[
             "chrom",
@@ -80,4 +80,5 @@ def get_cpcdh_exon(gtffile: os.PathLike) -> pd.DataFrame:
         })
     )
 
-    return df
+    (cfg["data_dir"] / "result").mkdir(exist_ok=True, parents=True)
+    df.to_csv(cfg["data_dir"] / "result" / "cpcdh.csv", index=False)
