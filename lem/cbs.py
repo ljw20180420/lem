@@ -119,7 +119,9 @@ def correct_tCBS(cfg: dict) -> None:
             seqs.append(seq)
 
     pd.DataFrame({"gene": df["name"], "seq": seqs}).to_csv(
-        cfg["data_dir"] / "result" / "tCBS.csv", header=["gene", "seq"], index=False
+        cfg["data_dir"] / "result" / "CBS" / "tCBS.csv",
+        header=["gene", "seq"],
+        index=False,
     )
 
     (cfg["data_dir"] / "result" / "CBS").mkdir(exist_ok=True, parents=True)
@@ -131,9 +133,11 @@ def correct_tCBS(cfg: dict) -> None:
     )
 
     for cluster, prefix in zip(["alpha", "beta", "gamma"], ["Pcdha", "Pcdhb", "Pcdhg"]):
-        pd.read_csv(cfg["data_dir"] / "result" / "tCBS.csv", header=0).query(
+        pd.read_csv(cfg["data_dir"] / "result" / "CBS" / "tCBS.csv", header=0).query(
             "gene.str.startswith(@prefix)"
-        ).to_csv(cfg["data_dir"] / "result" / f"tCBS.{cluster}.csv", index=False)
+        ).to_csv(
+            cfg["data_dir"] / "result" / "CBS" / f"tCBS.{cluster}.csv", index=False
+        )
 
         get_motif(
             seq_file=cfg["data_dir"] / "result" / "CBS" / f"tCBS.{cluster}.csv",
