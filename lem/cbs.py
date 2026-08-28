@@ -49,12 +49,57 @@ def get_motif(seq_file: os.PathLike, matrix_file: os.PathLike, meme_file: os.Pat
     )
 
 
-def get_eCBS_motif(cfg: dict) -> None:
+def get_eCBS(cfg: dict) -> None:
     (cfg["data_dir"] / "result" / "CBS").mkdir(exist_ok=True, parents=True)
+
     get_motif(
         seq_file="human_eCBS.csv",
         matrix_file=cfg["data_dir"] / "result" / "CBS" / "eCBS.txt",
         meme_file=cfg["data_dir"] / "result" / "CBS" / "eCBS.meme",
+    )
+
+    df_alpha = (
+        pd
+        .read_csv(cfg["data_dir"] / "result" / "cpcdh.csv", header=0)
+        .query(r"name.str.match(r'^Pcdha\d')")
+        .reset_index(drop=True)[["chrom", "start", "end", "name"]]
+    )
+    starts = []
+    ends = []
+    scores = []
+    strands = []
+    for chrom, start, end, name in df_alpha.itertuples(index=False):
+        end = (start + end) // 2
+        proc = subprocess.run(
+            args=["./call_cbs.sh", "ecbs", chrom, str(start), str(end)],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        df_fimo = (
+            pd
+            .read_csv(io.StringIO(proc.stdout), sep="\t", header=0)
+            .query("strand == '+'")
+            .reset_index(drop=True)
+        )
+        max_row = df_fimo.loc[df_fimo["score"].idxmax()]
+        starts.append(max_row["start"])
+        ends.append(max_row["stop"] + 1)
+        scores.append(max_row["score"])
+        strands.append(max_row["strand"])
+
+    pd.DataFrame({
+        "chrom": df_alpha["chrom"],
+        "start": starts,
+        "end": ends,
+        "name": df_alpha["name"],
+        "score": scores,
+        "strand": strands,
+    }).to_csv(
+        cfg["data_dir"] / "result" / "CBS" / "eCBS.bed",
+        sep="\t",
+        index=False,
+        header=False,
     )
 
 

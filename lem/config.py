@@ -49,7 +49,7 @@ def cpcdh() -> dict:
         "data_dir": data_dir,
         "CBS": {
             "pCBS": data_dir / "result" / "CBS" / "pCBS.bed",
-            "eCBS": "eCBS.bed",
+            "eCBS": data_dir / "result" / "CBS" / "eCBS.bed",
             "tCBS": data_dir / "result" / "peak" / "tCBS_ltj_mm10.bed",
             "oCBS": "oCBS.bed",
         },

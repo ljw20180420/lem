@@ -36,7 +36,7 @@ find_eCBS_motif() {
 
     extract_DNA ${chrom} ${start} ${end} |
     fimo --text \
-        --thresh ${thres}
+        --thresh ${thres} \
         --norc \
         ${data_dir}/result/CBS/eCBS.meme -
 }
