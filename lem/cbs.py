@@ -2,6 +2,7 @@ import io
 import os
 import subprocess
 
+import bioframe as bf
 import numpy as np
 import pandas as pd
 import py2bit
@@ -198,3 +199,77 @@ def bed2seq(
             if strand == "-":
                 seq = str(Seq(seq).reverse_complement())
             print(seq, name)
+
+
+def filter_non_peak_cbs(cfg: dict) -> None:
+    df_peak = pd.read_csv(
+        cfg["data_dir"]
+        / "result"
+        / "peak"
+        / "ESC.CTCF.merged.sort.bam_RPKM.mm10.narrowPeak",
+        sep="\t",
+        names=[
+            "chrom",
+            "start",
+            "end",
+            "name",
+            "score",
+            "strand",
+            "signalValue",
+            "pValue",
+            "qValue",
+            "peak",
+        ],
+    )
+
+    df_cbses = []
+    for (
+        cbs_type,
+        bed_file,
+    ) in cfg["CBS"].items():
+        df_cbses.append(
+            pd.read_csv(
+                bed_file,
+                sep="\t",
+                names=["chrom", "start", "end", "name", "score", "strand"],
+            ).assign(cbs_type=cbs_type)
+        )
+    df_cbs = pd.concat(df_cbses, ignore_index=True)
+
+    df = (
+        bf
+        .overlap(df_cbs, df_peak, how="left")
+        .assign(
+            peak_score=lambda df: df["score_"].fillna(0),
+            peak_summit=lambda df: df["start_"] + df["peak_"],
+        )
+        .assign(
+            peak_summit=lambda df: df["peak_summit"].fillna(
+                (df["start"] + df["end"]) // 2
+            ),
+        )
+    )
+
+    summits = df["peak_summit"].copy()
+    df = (
+        df
+        .groupby([
+            "chrom",
+            "start",
+            "end",
+            "name",
+            "score",
+            "strand",
+            "cbs_type",
+        ])
+        .agg(
+            peak_max_idx=pd.NamedAgg(column="peak_score", aggfunc="idxmax"),
+            peak_score=pd.NamedAgg(column="peak_score", aggfunc="max"),
+        )
+        .reset_index()
+    )
+    df["peak_summit"] = summits.loc[df["peak_max_idx"]].reset_index(drop=True)
+
+    df.drop(columns=["peak_max_idx"]).sort_values(
+        by=["chrom", "start"], ignore_index=True
+    ).to_csv(cfg["data_dir"] / "result" / "CBS" / "cbs_with_peak.csv", index=False)

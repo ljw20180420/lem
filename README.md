@@ -1,15 +1,10 @@
-- remove CBS without peak
-  - call peak
-  - check peak align signals
-  - remove CBS without peak
+- transform peak score to probability
 - 读取call的CBS（改接口）
 - 可视化模拟结果
 - blender动画可视化
 
 - cpcdh热图
   - 张默hic库归并
-  - 画图也要模块化搭积木
-  - 热图边上加margin的函数
   - 转45度的函数
   - AB-compartment双色块图
   - raw热图

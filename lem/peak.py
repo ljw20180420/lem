@@ -1,6 +1,8 @@
 import os
 import subprocess
 
+import pandas as pd
+
 
 def crossmap(cfg: dict) -> None:
     (cfg["data_dir"] / "result" / "peak").mkdir(exist_ok=True, parents=True)
@@ -29,6 +31,26 @@ def crossmap(cfg: dict) -> None:
             os.fspath(cfg["data_dir"] / "result" / "peak" / "tCBS_ltj_mm10.bed"),
         ],
         check=True,
+    )
+
+    df = pd.read_csv(
+        cfg["data_dir"] / "result" / "peak" / "tCBS_ltj_mm10.bed",
+        sep="\t",
+        names=["chrom", "start", "end", "name", "score", "strand"],
+    )
+    df["name"] = df["name"].map(
+        lambda ele: (
+            ele
+            .replace("mmPcdhα", "Pcdha")
+            .replace("mmPcdhβ", "Pcdhb")
+            .replace("mmPcdhγ", "Pcdhg")
+        )
+    )
+    df.to_csv(
+        cfg["data_dir"] / "result" / "peak" / "tCBS_ltj_mm10.bed",
+        sep="\t",
+        index=False,
+        header=False,
     )
 
 
@@ -71,8 +93,36 @@ def call_peak(
                 cfg["data_dir"]
                 / "result"
                 / "peak"
-                / "ESC.CTCF.merged.sort.bam_RPKM.mm10.narrowPeak"
+                / "ESC.CTCF.merged.sort.bam_RPKM.mm10.bed"
             ),
         ],
         check=True,
+    )
+
+    df_peak = pd.read_csv(
+        cfg["data_dir"] / "result" / "peak" / "ESC.CTCF.merged.sort.bam_RPKM.mm10.bed",
+        sep="\t",
+        names=[
+            "chrom",
+            "chromStart",
+            "chromEnd",
+            "name",
+            "score",
+            "strand",
+            "signalValue",
+            "pValue",
+            "qValue",
+            "peak",
+        ],
+        skiprows=1,
+    )
+
+    df_peak.to_csv(
+        cfg["data_dir"]
+        / "result"
+        / "peak"
+        / "ESC.CTCF.merged.sort.bam_RPKM.mm10.narrowPeak",
+        sep="\t",
+        index=False,
+        header=False,
     )

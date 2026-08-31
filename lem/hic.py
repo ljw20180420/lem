@@ -114,23 +114,6 @@ def align_E1(cfg: dict) -> None:
     df_AB.to_csv(cfg["data_dir"] / "result" / "hic" / "AB.csv", index=False)
 
 
-def find_CBS(cfg: dict):
-    df = pd.read_csv(
-        cfg["data_dir"] / "GSE235386" / "GSM7501570_esc.bed.gz",
-        sep="\t",
-        names=["chrom", "start", "end"],
-    )
-    range = pd.DataFrame({
-        "chrom": [cfg["chrom"]],
-        "start": [cfg["start"]],
-        "end": [cfg["end"]],
-    })
-    df_CBS = bf.overlap(df, range, how="inner")[["chrom", "start", "end"]]
-    pCBS = pd.read_csv(cfg["data_dir"] / "pCBS.csv", header=0)
-    df_pCBS = bf.overlap(df_CBS, pCBS, how="inner")
-    breakpoint()
-
-
 def align_CBS(cfg: dict) -> None:
     df_AB = pd.read_csv(cfg["data_dir"] / "output" / "AB.csv", header=0)
     for name, file in cfg["CBS"].items():
